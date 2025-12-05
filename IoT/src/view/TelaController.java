@@ -1,6 +1,7 @@
 package view;
 
 import com.fazecast.jSerialComm.SerialPort;
+import application.EventoDAO;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
@@ -21,24 +22,21 @@ public class TelaController {
     @FXML private Button btnConectar;
     @FXML private Label lblStatus;
 
+    // ===================== CONECTAR ============================
     public boolean conectar() {
-        porta = SerialPort.getCommPort("COM7"); // ajuste conforme necessário
+        porta = SerialPort.getCommPort("COM7");
         porta.setBaudRate(9600);
         porta.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 1000, 0);
 
         if (porta.openPort()) {
-            System.out.println("Porta aberta com sucesso!");
             lblStatus.setText("Arduino conectado em " + getDataHoraAtual());
             saida = porta.getOutputStream();
             entrada = porta.getInputStream();
 
-            // sincroniza ao conectar
-            atualizaDataHora("conectar");
+            EventoDAO.registrarEvento("Arduino UNO - Porta COM7", "N/A", "Conectou");
 
             return true;
         } else {
-            deconectar();
-            System.out.println("Falha ao abrir porta.");
             lblStatus.setText("Falha ao abrir porta em " + getDataHoraAtual());
             return false;
         }
@@ -46,24 +44,29 @@ public class TelaController {
 
     @FXML
     public void initialize() {
+
+        // ================= LIGAR LED ==================
         btnAcionar.setOnAction(e -> {
             if (porta != null && porta.isOpen()) {
+                // envia comando com data/hora
                 enviarComando("ligar " + getDataHoraAtual() + "\n");
-                lblStatus.setText("LED Ligado em " + getDataHoraAtual());
+                EventoDAO.registrarEvento("Arduino UNO", "ON", "Ligou LED");
             } else {
                 lblStatus.setText("Não é possível ligar: Arduino desconectado");
             }
         });
 
+        // ================= DESLIGAR LED ==================
         btnDesativar.setOnAction(e -> {
             if (porta != null && porta.isOpen()) {
                 enviarComando("desligar " + getDataHoraAtual() + "\n");
-                lblStatus.setText("LED Desligado em " + getDataHoraAtual());
+                EventoDAO.registrarEvento("Arduino UNO", "OFF", "Desligou LED");
             } else {
                 lblStatus.setText("Não é possível desligar: Arduino desconectado");
             }
         });
 
+        // ================= CONECTAR / DESCONECTAR ==================
         btnConectar.setOnAction(e -> {
             if (porta == null || !porta.isOpen()) {
                 if (conectar()) {
@@ -71,22 +74,20 @@ public class TelaController {
                     new Thread(this::receberDados).start();
                 }
             } else {
-                // sincroniza ao desconectar
+                EventoDAO.registrarEvento("Arduino UNO - Porta COM7", "N/A", "Desconectou");
                 enviarComando("desconectar " + getDataHoraAtual() + "\n");
 
                 deconectar();
-                btnConectar.setText("Conectar");
                 lblStatus.setText("Arduino desconectado em " + getDataHoraAtual());
+                btnConectar.setText("Conectar");
             }
         });
     }
 
     private void enviarComando(String comando) {
         try {
-            if (saida != null) {
-                saida.write(comando.getBytes());
-                saida.flush();
-            }
+            saida.write(comando.getBytes());
+            saida.flush();
         } catch (Exception ex) {
             ex.printStackTrace();
         }
@@ -108,6 +109,7 @@ public class TelaController {
                             String mensagem = acumulador.substring(0, index).trim();
                             acumulador.delete(0, index + 1);
 
+                            // mostra exatamente o que o Arduino mandou (já com data/hora)
                             javafx.application.Platform.runLater(() -> lblStatus.setText(mensagem));
                         }
                     }
@@ -126,15 +128,6 @@ public class TelaController {
             if (porta != null && porta.isOpen()) porta.closePort();
         } catch (Exception e) {
             e.printStackTrace();
-        }
-    }
-
-    public void atualizaDataHora(String acao) {
-        if (porta == null || !porta.isOpen()) {
-            lblStatus.setText("Arduino desconectado em " + getDataHoraAtual());
-        } else {
-            String comando = acao + " " + getDataHoraAtual() + "\n";
-            enviarComando(comando);
         }
     }
 

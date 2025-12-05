@@ -8,4 +8,5 @@ module IoT {
 
     opens application to javafx.graphics;
     exports application;
+    requires java.sql;
 }
